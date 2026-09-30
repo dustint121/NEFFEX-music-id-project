@@ -3,14 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NEFFEX Identifier</title>
-  <link rel="icon" href="data:,">
+  <title>NEFFEX Music Identifier</title>
+  <link rel="icon" href="{{ url_for('favicon') }}" sizes="any">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <main class="app">
     <header class="header">
-      <h1>NEFFEX Identifier</h1>
+      <div class="title-row">
+        <h1>NEFFEX Music Identifier</h1>
+        <button id="info-open" class="info-button" type="button" aria-label="About NEFFEX"
+                aria-haspopup="dialog" aria-controls="info-dialog" title="About NEFFEX">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle>
+            <line x1="12" y1="11" x2="12" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+            <circle cx="12" cy="7.5" r="1.3" fill="currentColor"></circle>
+          </svg>
+        </button>
+      </div>
       <p class="subtitle" id="library">Loading library...</p>
     </header>
 
@@ -42,8 +53,18 @@
 
     <section class="result" id="result" hidden aria-live="polite">
       <p class="result-kicker" id="result-kicker"></p>
-      <h2 class="result-title" id="result-title"></h2>
+      <div class="song-card" id="song-card">
+        <a class="song-art" id="song-art" target="_blank" rel="noopener noreferrer" hidden>
+          <img id="song-img" alt="" loading="lazy" referrerpolicy="no-referrer">
+        </a>
+        <div class="song-body">
+          <h2 class="result-title" id="result-title"></h2>
+          <p class="song-artist" id="song-artist">NEFFEX</p>
+          <div class="song-links" id="song-links"></div>
+        </div>
+      </div>
       <p class="result-meta" id="result-meta"></p>
+      <p class="alternatives-label" id="alternatives-label" hidden>Runners-up</p>
       <ul class="alternatives" id="alternatives"></ul>
     </section>
 
@@ -52,6 +73,38 @@
       Audio is sent to this server only to identify the song and is not stored.
     </footer>
   </main>
+
+  <dialog class="info-dialog" id="info-dialog" aria-labelledby="info-title">
+    <div class="info-content">
+      <button class="info-close" id="info-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="info-title">About NEFFEX</h2>
+      <p>
+        NEFFEX is an independent music project from Orange County, California, started in 2014 by
+        vocalist Bryce Savage and producer Cameron Wales. Bryce Savage carries it on today.
+      </p>
+      <p>
+        The sound is a high-energy mix of hip-hop, alternative rock and EDM with pop hooks. Most songs are
+        motivational: they are about pushing through hard times, betting on yourself and chasing your goals,
+        which is why they show up so often in workout, gaming and sports videos.
+      </p>
+      <p>
+        Most of the catalog is released as copyright-free music, so creators can put it in their videos
+        and streams, including monetized ones, without copyright claims. That has made NEFFEX a favorite
+        soundtrack for creators everywhere, including me: I use these songs in my own music videos,
+        and this app can tell you which one is playing.
+      </p>
+      <h3>Find NEFFEX</h3>
+      <div class="info-links">
+        <a href="https://www.neffexmusic.com" target="_blank" rel="noopener noreferrer">Official website</a>
+        <a href="https://www.youtube.com/channel/UCBefBxNTPoNCQBU_Lta6Nvg" target="_blank" rel="noopener noreferrer">YouTube channel</a>
+        <a href="https://soundcloud.com/neffexmusic" target="_blank" rel="noopener noreferrer">SoundCloud</a>
+      </div>
+      <p class="info-note">
+        This is an unofficial fan project and is not affiliated with NEFFEX. Check the terms on
+        neffexmusic.com before using a song, and credit the artist.
+      </p>
+    </div>
+  </dialog>
 
   <script>
     window.APP_CONFIG = {

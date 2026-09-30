@@ -25,6 +25,15 @@
     title: document.getElementById("result-title"),
     meta: document.getElementById("result-meta"),
     alternatives: document.getElementById("alternatives"),
+    alternativesLabel: document.getElementById("alternatives-label"),
+    songCard: document.getElementById("song-card"),
+    songArt: document.getElementById("song-art"),
+    songImg: document.getElementById("song-img"),
+    songArtist: document.getElementById("song-artist"),
+    songLinks: document.getElementById("song-links"),
+    infoOpen: document.getElementById("info-open"),
+    infoClose: document.getElementById("info-close"),
+    infoDialog: document.getElementById("info-dialog"),
   };
 
   const CIRCUMFERENCE = 2 * Math.PI * 54;
@@ -99,6 +108,51 @@
     return `${m}:${s}`;
   }
 
+  // Brand icons for the three sources (simple inline SVG paths).
+  const SOURCES = [
+    { key: "youtube", label: "YouTube",
+      icon: '<path d="M23 7.2a3 3 0 0 0-2.1-2.1C19 4.6 12 4.6 12 4.6s-7 0-8.9.5A3 3 0 0 0 1 7.2 31 31 0 0 0 .5 12 31 31 0 0 0 1 16.8a3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1c.4-1.6.5-3.2.5-4.8s-.1-3.2-.5-4.8ZM9.7 15.1V8.9l5.8 3.1-5.8 3.1Z"/>' },
+    { key: "spotify", label: "Spotify",
+      icon: '<path d="M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22Zm5 15.9a.7.7 0 0 1-.9.2c-2.6-1.6-5.9-2-9.7-1.1a.7.7 0 0 1-.3-1.3c4.2-1 7.8-.6 10.7 1.2.3.2.4.6.2 1Zm1.3-3a.9.9 0 0 1-1.2.3c-3-1.8-7.5-2.4-11-1.3a.9.9 0 1 1-.5-1.7c4-1.2 9-.6 12.4 1.5.4.2.5.8.3 1.2Zm.1-3.1C14.8 8.7 9 8.5 5.6 9.5a1 1 0 1 1-.6-2c3.9-1.2 10.3-1 14.4 1.5a1 1 0 0 1-1 1.8Z"/>' },
+    { key: "soundcloud", label: "SoundCloud",
+      icon: '<path d="M11.6 7.2c-.3 0-.5.1-.7.2v10.1h8.4a3.4 3.4 0 0 0 .1-6.8 3 3 0 0 0-.8.1 5 5 0 0 0-7-3.6ZM9.9 8v9.5h-.8V8.4l.8-.4Zm-1.7.8v8.7h-.8V9.4l.8-.6Zm-1.7 1.3v7.4h-.8v-7.1l.8-.3Zm-1.7.4v7h-.8v-6.8l.8-.2Zm-1.7 1v5.9h-.8v-5.6l.8-.3ZM1.4 13v4.3H.6v-4l.8-.3Z"/>' },
+  ];
+
+  /*
+   * Fill the song card (title, YouTube thumbnail, source buttons).
+   * Args: song - a match object from /api/identify (title, links, thumbnail).
+   * Returns: nothing.
+   */
+  function renderSong(song) {
+    els.title.textContent = song.title;
+    els.songArtist.hidden = false;
+    els.songLinks.replaceChildren();
+    const links = song.links || {};
+
+    if (song.thumbnail) {
+      els.songImg.src = song.thumbnail;
+      els.songImg.alt = `${song.title} artwork`;
+      els.songArt.href = links.youtube || song.thumbnail;
+      els.songArt.setAttribute("aria-label", `Watch ${song.title} on YouTube`);
+      els.songArt.hidden = false;
+    } else {
+      els.songArt.hidden = true;
+      els.songImg.removeAttribute("src");
+    }
+
+    SOURCES.forEach(({ key, label, icon }) => {
+      if (!links[key]) return;   // e.g. a few songs have no Spotify release
+      const a = document.createElement("a");
+      a.className = `source source-${key}`;
+      a.href = links[key];
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.setAttribute("aria-label", `Open ${song.title} on ${label}`);
+      a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg><span>${label}</span>`;
+      els.songLinks.appendChild(a);
+    });
+  }
+
   /*
    * Show the server's answer.
    * Args: data - JSON from /api/identify. Returns: nothing.
@@ -107,23 +161,36 @@
     els.result.hidden = false;
     els.result.classList.toggle("no-match", !data.match);
     els.alternatives.replaceChildren();
+    els.alternativesLabel.hidden = true;
     const method = data.mode === "neural" ? "Neural" : "Landmark";
 
     if (data.match) {
       const b = data.best;
       els.kicker.textContent = "Match found";
-      els.title.textContent = b.name;
+      renderSong(b);
       els.meta.textContent = `${method} · starts ~${formatOffset(b.offset_sec)} · score ${b.score} ` +
         `(needs ${data.threshold}) · ${b.confidence}x runner-up · ${data.elapsed_ms} ms`;
       data.alternatives.forEach((alt) => {
         const li = document.createElement("li");
-        li.textContent = `${alt.name} (score ${alt.score})`;
+        const url = alt.links && alt.links.youtube;
+        const name = document.createElement(url ? "a" : "span");
+        name.textContent = alt.title;
+        if (url) {
+          name.href = url;
+          name.target = "_blank";
+          name.rel = "noopener noreferrer";
+        }
+        li.append(name, ` (score ${alt.score})`);
         els.alternatives.appendChild(li);
       });
+      els.alternativesLabel.hidden = data.alternatives.length === 0;
       setStatus("Tap again to identify another song.");
     } else {
       els.kicker.textContent = "No confident match";
-      els.title.textContent = data.best ? `Closest: ${data.best.name}` : "Nothing matched";
+      els.title.textContent = data.best ? `Closest: ${data.best.title}` : "Nothing matched";
+      els.songArt.hidden = true;
+      els.songArtist.hidden = true;
+      els.songLinks.replaceChildren();
       els.meta.textContent = data.best
         ? `${method} · score ${data.best.score} (needs ${data.threshold}) · ${data.best.confidence}x runner-up`
         : `${method} · no fingerprints matched`;
@@ -132,6 +199,27 @@
         : "Try a longer recording, closer to the speaker, or switch methods.";
       setStatus(tip, data.input.too_quiet ? "warn" : "");
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // About NEFFEX popup
+  // -------------------------------------------------------------------------
+
+  /*
+   * Wire up the info button and dialog (Esc and backdrop click close it).
+   * Args: none. Returns: nothing.
+   */
+  function setupInfo() {
+    const dialog = els.infoDialog;
+    els.infoOpen.addEventListener("click", () => {
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    });
+    els.infoClose.addEventListener("click", () => dialog.close());
+    dialog.addEventListener("click", (e) => {
+      if (e.target === dialog) dialog.close();   // click on the backdrop
+    });
+    dialog.addEventListener("close", () => els.infoOpen.focus());
   }
 
   // -------------------------------------------------------------------------
@@ -409,6 +497,7 @@
   });
 
   renderMode();
+  setupInfo();
   setState("idle");
   const reason = micUnsupportedReason();
   if (reason) setStatus(reason, "error");

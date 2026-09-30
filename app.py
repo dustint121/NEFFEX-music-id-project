@@ -1,11 +1,15 @@
 """
-Flask web interface for the NEFFEX song identifier.
+Flask web interface for the NEFFEX Music Identifier.
 
 Serves a single page with a record button and a Landmark / Neural switch.
 The browser records the microphone with the Web Audio API and uploads a WAV
 file; the server decodes it and runs either:
     landmark : neffex_id.py      (Wang 2003 spectrogram-peak hashing)
     neural   : nn_scripts/       (contrastive CNN embeddings)
+
+Song titles and SoundCloud / YouTube / Spotify links come from
+song_catalog.json, matched by the number prefix of each song name
+("87_Take Me Back Again" -> song_number 87).
 
 The server never touches a microphone itself, so sounddevice/PortAudio are
 not needed on the server.
@@ -25,13 +29,16 @@ Requirements:
 
 import argparse
 import io
+import json
+import re
 import threading
 import time
+from pathlib import Path
 
 import librosa
 import numpy as np
 import soundfile as sf
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 import neffex_id as landmark
 from nn_scripts import config as nn_config
@@ -42,6 +49,8 @@ from nn_scripts.matching import is_confident as nn_is_confident
 from nn_scripts.matching import score_threshold as nn_score_threshold
 from nn_scripts.model import load_model
 
+ROOT_DIR = Path(__file__).resolve().parent
+CATALOG_PATH = ROOT_DIR / "song_catalog.json"
 MIN_SECONDS = 1.0
 RECORD_SECONDS = 8      # how long the browser listens before auto-stopping
 MAX_SECONDS = 30.0
@@ -187,6 +196,111 @@ engines = Engines()
 
 
 # ---------------------------------------------------------------------------
+# Song catalog: song_catalog.json maps the number prefix of each MP3/index
+# name ("87_Take Me Back Again") to its title and SoundCloud/YouTube/Spotify links
+# ---------------------------------------------------------------------------
+YOUTUBE_ID = re.compile(r"(?:v=|youtu\.be/|/embed/|/shorts/)([\w-]{11})")
+NUMBER_PREFIX = re.compile(r"^\s*(\d+)\s*[_\-. ]\s*(.*)$")
+
+
+def normalize_title(name):
+    """
+    Lower-case a song title and drop an "NEFFEX - " prefix and punctuation.
+
+    Args:
+        name: str title, e.g. "NEFFEX - Take Me Back".
+
+    Returns:
+        str key, e.g. "take me back".
+    """
+    name = re.sub(r"^\s*neffex\s*[-_:]\s*", "", name, flags=re.IGNORECASE)
+    return " ".join(re.sub(r"[^\w\s]", " ", name.lower()).split())
+
+
+class Catalog:
+    """
+    song_catalog.json loaded into a dict keyed by song_number.
+    Reloads automatically when the file changes on disk.
+
+    Attributes:
+        path: pathlib.Path of the JSON file.
+        songs: dict {int song_number: dict entry from the JSON}.
+        by_title: dict {normalized song_name: dict entry}, used when a name
+            has no number prefix (e.g. "NEFFEX - Cold").
+    """
+
+    def __init__(self, path=CATALOG_PATH):
+        self.path = path
+        self.songs = {}
+        self.by_title = {}
+        self._mtime = None
+        self._lock = threading.Lock()
+
+    def _refresh(self):
+        """
+        Re-read the JSON file if it is new or has been modified.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        try:
+            mtime = self.path.stat().st_mtime
+        except FileNotFoundError:
+            self.songs, self._mtime = {}, None
+            return
+        if mtime == self._mtime:
+            return
+        with self._lock:
+            with open(self.path, encoding="utf-8") as f:
+                entries = json.load(f)
+            self.songs = {int(e["song_number"]): e for e in entries if "song_number" in e}
+            self.by_title = {normalize_title(e.get("song_name", "")): e for e in entries}
+            self._mtime = mtime
+            print(f"Catalog loaded: {len(self.songs)} songs from {self.path.name}")
+
+    def lookup(self, index_name):
+        """
+        Resolve an index/MP3 name to display info.
+
+        Args:
+            index_name: str song name as stored in the index, e.g. "87_Take Me Back Again".
+
+        Returns:
+            dict with id (int or None), title (str), links (dict of
+            soundcloud/youtube/spotify URLs, only those that exist), and
+            thumbnail (YouTube thumbnail URL or None).
+        """
+        self._refresh()
+        m = NUMBER_PREFIX.match(index_name)
+        number = int(m.group(1)) if m else None
+        fallback_title = m.group(2) if m and m.group(2) else index_name
+        entry = self.songs.get(number) if number is not None else None
+        if entry is None:
+            entry = self.by_title.get(normalize_title(fallback_title))
+            number = entry.get("song_number") if entry else number
+        if entry is None:
+            return {"id": number, "title": fallback_title, "links": {}, "thumbnail": None}
+
+        links = {}
+        for key in ("soundcloud", "youtube", "spotify"):
+            url = entry.get(f"{key}_url")
+            if isinstance(url, str) and url.startswith(("https://", "http://")):
+                links[key] = url
+        thumbnail = None
+        yt = YOUTUBE_ID.search(links.get("youtube", ""))
+        if yt:
+            thumbnail = f"https://i.ytimg.com/vi/{yt.group(1)}/hqdefault.jpg"
+        return {"id": number, "title": entry.get("song_name") or fallback_title,
+                "links": links, "thumbnail": thumbnail}
+
+
+catalog = Catalog()
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 def decode_upload(data):
@@ -205,15 +319,16 @@ def decode_upload(data):
 
 def match_to_dict(m):
     """
-    Convert a Match from either system to JSON-safe values.
+    Convert a Match from either system to JSON-safe values, with catalog info.
 
     Args:
         m: neffex_id.Match or nn_scripts.matching.Match.
 
     Returns:
-        dict with name, score, confidence, offset_sec.
+        dict with name (index name), id, title, links, thumbnail, score,
+        confidence, offset_sec.
     """
-    return {"name": m.name, "score": round(float(m.score), 2),
+    return {"name": m.name, **catalog.lookup(m.name), "score": round(float(m.score), 2),
             "confidence": round(min(float(m.confidence), 99.0), 2),
             "offset_sec": round(max(float(m.offset_sec), 0.0), 1)}
 
@@ -263,6 +378,19 @@ def index():
         Rendered templates/index.html.
     """
     return render_template("index.html", min_seconds=MIN_SECONDS, record_seconds=RECORD_SECONDS)
+
+
+@app.get("/favicon.ico")
+def favicon():
+    """
+    Browser tab icon (static/favicon.ico). Browsers also request /favicon.ico
+    directly, so serve it at the root as well as through the <link> tag.
+
+    Returns:
+        flask.Response with the .ico file, cached for a day.
+    """
+    return send_from_directory(app.static_folder, "favicon.ico",
+                               mimetype="image/vnd.microsoft.icon", max_age=86400)
 
 
 @app.get("/api/status")
@@ -359,6 +487,7 @@ def main():
     args = parser.parse_args()
 
     engines.load()  # load before the first request, not during it
+    catalog.lookup("")  # load song_catalog.json and report it
     if args.host not in ("127.0.0.1", "localhost") and not args.https:
         print("Warning: browsers only allow the microphone on HTTPS or localhost. "
               "Use --https or put the app behind an HTTPS proxy.")
