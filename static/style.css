@@ -1,0 +1,196 @@
+:root {
+  --bg: #0e0f13;
+  --surface: #171920;
+  --border: #2a2d38;
+  --text: #f2f3f5;
+  --muted: #9aa0ad;
+  --accent: #3fd0c9;
+  --accent-strong: #22b3ac;
+  --danger: #ff6b6b;
+  --warn: #f5c451;
+  --radius: 14px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at top, #1a1d27 0%, var(--bg) 60%);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  min-height: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 40px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.header { text-align: center; }
+.header h1 { margin: 0; font-size: 1.5rem; font-weight: 650; letter-spacing: 0.02em; }
+.subtitle { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+/* ---------- Record button ---------- */
+.recorder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.record-button {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(145deg, var(--accent), var(--accent-strong));
+  color: #06201f;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 12px 40px rgba(63, 208, 201, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.record-button:hover:not(:disabled) { transform: scale(1.03); }
+.record-button:active:not(:disabled) { transform: scale(0.98); }
+.record-button:focus-visible { outline: 3px solid var(--text); outline-offset: 6px; }
+.record-button:disabled { cursor: default; filter: saturate(0.5) brightness(0.8); }
+
+.record-label { position: relative; z-index: 2; }
+
+.level {
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  transform: scale(0);
+  transition: transform 0.08s linear;
+  z-index: 1;
+}
+
+.progress {
+  position: absolute;
+  inset: -14px;
+  width: calc(100% + 28px);
+  height: calc(100% + 28px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+.progress-track { fill: none; stroke: var(--border); stroke-width: 3; }
+.progress-bar {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.1s linear;
+}
+
+body[data-state="recording"] .record-button {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+body[data-state="uploading"] .record-button {
+  animation: breathe 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(63, 208, 201, 0.45); }
+  50% { box-shadow: 0 0 0 18px rgba(63, 208, 201, 0); }
+}
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .record-button, .level, .progress-bar { transition: none; }
+  body[data-state="recording"] .record-button,
+  body[data-state="uploading"] .record-button { animation: none; }
+}
+
+/* ---------- Mode switch ---------- */
+.mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.mode-name {
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+.mode-name.active { color: var(--text); }
+
+.switch { position: relative; display: inline-block; width: 56px; height: 30px; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+.slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: background 0.2s ease;
+}
+.slider::before {
+  content: "";
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  left: 3px;
+  top: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  transition: transform 0.2s ease;
+}
+.switch input:checked + .slider::before { transform: translateX(26px); }
+.switch input:focus-visible + .slider { outline: 2px solid var(--text); outline-offset: 3px; }
+.switch input:disabled + .slider { opacity: 0.5; }
+
+.mode-hint { margin: -8px 0 0; color: var(--muted); font-size: 0.85rem; text-align: center; min-height: 1.3em; }
+
+.status { margin: 0; text-align: center; color: var(--muted); min-height: 3em; max-width: 420px; }
+.status.error { color: var(--danger); }
+.status.warn { color: var(--warn); }
+
+/* ---------- Result ---------- */
+.result {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.result.no-match { border-left-color: var(--warn); }
+.result-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+.result.no-match .result-kicker { color: var(--warn); }
+.result-title { margin: 4px 0 6px; font-size: 1.35rem; overflow-wrap: anywhere; }
+.result-meta { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.alternatives { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 0.85rem; }
+.alternatives:empty { display: none; }
+
+.footer { color: var(--muted); font-size: 0.75rem; text-align: center; max-width: 420px; }

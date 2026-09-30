@@ -43,11 +43,11 @@ TRAIN_SNR_DB = (-3, 20)       # training noise range (dB). (-12, 20) handles -10
 # ---------------------------------------------------------------------------
 TOP_K = 5                     # neighbours per query window
 MIN_SIM = 0.3                 # ignore neighbours below this cosine similarity
-MIN_MATCH_SCORE = 2.0         # summed aligned similarity needed to report a result...
+MIN_MATCH_SCORE = 2.35        # summed aligned similarity needed to report a result...
 MIN_MEAN_SIM = 0.67           # ...capped at this x number of query windows, so clips
                               # under 2 s (1-2 windows) can still pass. 0.67 x 3 = 2.0,
                               # so clips of 2 s and longer use the same bar as before
-MIN_CONFIDENCE = 1.5          # winner must beat the runner-up by this factor
+MIN_CONFIDENCE = 1.0          # winner must beat the runner-up by this factor
 
 
 def pick_device():

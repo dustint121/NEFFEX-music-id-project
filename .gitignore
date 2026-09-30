@@ -5,3 +5,7 @@ Neffex mp3/
 test_mp3/
 neffex_audio_8k_meta.npz
 neffex_audio_8k.npy
+fp_clips/
+false_positive_test.py
+make_fp_clips.py
+fp_results.csv

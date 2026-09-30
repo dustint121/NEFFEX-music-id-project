@@ -55,8 +55,8 @@ FAN_OUT = 10              # pair each anchor with up to 10 peaks in its target z
 TARGET_DT = (1, 63)       # target zone: 1..63 frames ahead (~0.05 s .. 2.9 s)
 TARGET_DF = 200           # and within +/-200 bins (~1 kHz) of the anchor
 
-MIN_MATCH_SCORE = 8       # aligned hash matches required to report a result
-MIN_CONFIDENCE = 1.5      # ...and the winner must beat the runner-up by this factor
+MIN_MATCH_SCORE = 12.5       # aligned hash matches required to report a result
+MIN_CONFIDENCE = 1.0      # ...and the winner must beat the runner-up by this factor
 
 
 # ---------------------------------------------------------------------------
