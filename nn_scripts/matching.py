@@ -5,8 +5,8 @@ Query matching: nearest-neighbour search over the index + time-offset voting.
 import numpy as np
 import torch
 
-from .config import (DB_HOP, MIN_CONFIDENCE, MIN_MATCH_SCORE, MIN_SIM, QUERY_HOP,
-                     SAMPLE_RATE, TOP_K)
+from .config import (DB_HOP, MIN_CONFIDENCE, MIN_MATCH_SCORE, MIN_MEAN_SIM, MIN_SIM,
+                     QUERY_HOP, SAMPLE_RATE, TOP_K)
 from .index import embed_windows, frame_audio
 
 
@@ -19,13 +19,15 @@ class Match:
         score: float summed cosine similarity of time-aligned windows.
         offset_sec: float estimated position in the song where the clip starts.
         confidence: float ratio of this score to the runner-up's score.
+        n_windows: int number of query windows the clip was split into
     """
 
-    def __init__(self, name, score, offset_sec, confidence):
+    def __init__(self, name, score, offset_sec, confidence, n_windows):
         self.name = name
         self.score = score
         self.offset_sec = offset_sec
         self.confidence = confidence
+        self.n_windows = n_windows
 
 
 def identify(y, model, index, device, top_k=3):
@@ -77,8 +79,24 @@ def identify(y, model, index, device, top_k=3):
             best[sid] = (float(v), d)
     ranked = sorted(best.items(), key=lambda kv: kv[1][0], reverse=True)
     runner_up = ranked[1][1][0] if len(ranked) > 1 else 0.0
-    return [Match(index.names[sid], v, d * DB_HOP / SAMPLE_RATE, v / max(runner_up, 1e-6))
+    return [Match(index.names[sid], v, d * DB_HOP / SAMPLE_RATE, v / max(runner_up, 1e-6), len(q))
             for sid, (v, d) in ranked[:top_k]]
+
+
+def score_threshold(n_windows):
+    """
+    Minimum score for a clip split into n_windows query windows.
+
+    Each window adds at most 1.0, so a fixed threshold would make short clips
+    impossible to match; the bar is capped at MIN_MEAN_SIM per window.
+
+    Args:
+        n_windows: int number of query windows.
+
+    Returns:
+        float threshold.
+    """
+    return min(MIN_MATCH_SCORE, MIN_MEAN_SIM * n_windows)
 
 
 def is_confident(matches):
@@ -91,7 +109,7 @@ def is_confident(matches):
     Returns:
         bool.
     """
-    return (bool(matches) and matches[0].score >= MIN_MATCH_SCORE
+    return (bool(matches) and matches[0].score >= score_threshold(matches[0].n_windows)
             and matches[0].confidence >= MIN_CONFIDENCE)
 
 
