@@ -1,2 +1,6 @@
 .venv/
+__pycache__/
+nn_scripts/__pycache__/
 Neffex mp3/
+neffex_audio_8k_meta.npz
+neffex_audio_8k.npy
