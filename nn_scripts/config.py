@@ -43,16 +43,32 @@ TRAIN_SNR_DB = (-3, 20)       # training noise range (dB). (-12, 20) handles -10
 # ---------------------------------------------------------------------------
 TOP_K = 5                     # neighbours per query window
 MIN_SIM = 0.3                 # ignore neighbours below this cosine similarity
-MIN_MATCH_SCORE = 2.35        # summed aligned similarity needed to report a result...
-MIN_MEAN_SIM = 0.67           # ...capped at this x number of query windows, so clips
-                              # under 2 s (1-2 windows) can still pass. 0.67 x 3 = 2.0,
-                              # so clips of 2 s and longer use the same bar as before
+MIN_MATCH_SCORE = 2.35        # summed aligned similarity needed to report a result
+                              # (tuned with false_positive_test.py: 0/633 false matches)...
+MIN_MEAN_SIM = 0.67           # ...capped at this x number of query windows, so short
+                              # clips (1-3 windows) can still pass; clips of 2.5 s and
+                              # longer (4+ windows) use the full MIN_MATCH_SCORE
 MIN_CONFIDENCE = 1.0          # winner must beat the runner-up by this factor
+                              # (1.0 = off; the score cutoff alone separated right/wrong)
+
+# ---------------------------------------------------------------------------
+# Noise / silence rejection (used by matching.py, see nn_scripts/noise.py)
+# ---------------------------------------------------------------------------
+SILENCE_DBFS = -70.0          # query windows quieter than this RMS level are ignored
+                              # (muted mic, digital silence, very faint noise floor)
+NOISE_MARGIN = 0.10           # a window votes only if (best song similarity - best
+                              # noise-bank similarity) >= this. Raise to 0.15 if talking
+                              # or other sounds still match; lower if quiet music is missed
+DB_NOISE_SIM = 0.97           # index windows at least this similar to the noise bank
+                              # (silent intros/outros) are never used as matches
 
 
 def pick_device():
     """
     Choose the fastest available torch device.
+
+    Args:
+        None.
 
     Returns:
         torch.device ("cuda", "mps", or "cpu").

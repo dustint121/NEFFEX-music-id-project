@@ -418,7 +418,8 @@ def identify():
 
     Returns:
         JSON with match (bool), best, alternatives, threshold, timing, and
-        input diagnostics (duration, sample rate, peak level).
+        input diagnostics (duration, sample rate, peak and RMS level, and
+        no_sound when the recording is essentially silent).
     """
     mode = request.form.get("mode", "landmark")
     if mode not in ("landmark", "neural"):
@@ -441,10 +442,15 @@ def identify():
         y = y[:int(MAX_SECONDS * sr)]
         duration = MAX_SECONDS
     peak = float(np.abs(y).max()) if len(y) else 0.0
+    rms_dbfs = 20 * np.log10(max(float(np.sqrt(np.mean(np.square(y, dtype=np.float64)))), 1e-10))
+    no_sound = rms_dbfs < nn_config.SILENCE_DBFS   # muted or disconnected mic
 
     t0 = time.perf_counter()
     matches, confident, threshold = engines.identify(y, sr, mode)
     elapsed_ms = (time.perf_counter() - t0) * 1000
+
+    if no_sound:   # never report a song (or a "closest" guess) for silence
+        matches, confident = [], False
 
     return jsonify({
         "mode": mode,
@@ -454,7 +460,7 @@ def identify():
         "threshold": round(threshold, 2),
         "elapsed_ms": round(elapsed_ms),
         "input": {"duration_sec": round(duration, 2), "sample_rate": sr, "peak": round(peak, 4),
-                  "too_quiet": peak < 0.01},
+                  "rms_dbfs": round(rms_dbfs, 1), "too_quiet": peak < 0.01, "no_sound": bool(no_sound)},
     })
 
 

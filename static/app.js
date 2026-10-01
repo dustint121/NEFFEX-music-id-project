@@ -186,18 +186,23 @@
       els.alternativesLabel.hidden = data.alternatives.length === 0;
       setStatus("Tap again to identify another song.");
     } else {
-      els.kicker.textContent = "No confident match";
-      els.title.textContent = data.best ? `Closest: ${data.best.title}` : "Nothing matched";
+      const silent = data.input && data.input.no_sound;
+      els.kicker.textContent = silent ? "No sound detected" : "No confident match";
+      els.title.textContent = silent ? "Nothing heard"
+        : data.best ? `Closest: ${data.best.title}` : "Nothing matched";
       els.songArt.hidden = true;
       els.songArtist.hidden = true;
       els.songLinks.replaceChildren();
-      els.meta.textContent = data.best
+      els.meta.textContent = silent ? `${method} · input level ${data.input.rms_dbfs} dBFS`
+        : data.best
         ? `${method} · score ${data.best.score} (needs ${data.threshold}) · ${data.best.confidence}x runner-up`
         : `${method} · no fingerprints matched`;
-      const tip = data.input.too_quiet
-        ? "The recording was very quiet. Move closer to the speaker or check the input device."
-        : "Try a longer recording, closer to the speaker, or switch methods.";
-      setStatus(tip, data.input.too_quiet ? "warn" : "");
+      const tip = silent
+        ? "The microphone picked up silence. Check that it is not muted and that music is playing nearby."
+        : data.input.too_quiet
+          ? "The recording was very quiet. Move closer to the speaker or check the input device."
+          : "Try a longer recording, closer to the speaker, or switch methods.";
+      setStatus(tip, silent || data.input.too_quiet ? "warn" : "");
     }
   }
 

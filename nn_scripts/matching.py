@@ -6,8 +6,9 @@ import numpy as np
 import torch
 
 from .config import (DB_HOP, MIN_CONFIDENCE, MIN_MATCH_SCORE, MIN_MEAN_SIM, MIN_SIM,
-                     QUERY_HOP, SAMPLE_RATE, TOP_K)
+                     NOISE_MARGIN, QUERY_HOP, SAMPLE_RATE, TOP_K)
 from .index import embed_windows, frame_audio
+from .noise import get_guard, loud_enough
 
 
 class Match:
@@ -34,6 +35,10 @@ def identify(y, model, index, device, top_k=3):
     """
     Identify a clip: embed windows, nearest-neighbour search, offset voting.
 
+    Windows that are near-silent or sound more like noise than music cast no
+    votes (see nn_scripts/noise.py). n_windows still counts every window, so
+    the score threshold is not lowered when windows are dropped.
+
     Args:
         y: 1-D numpy float array of audio at SAMPLE_RATE.
         model: FingerprintNet in eval mode.
@@ -44,15 +49,25 @@ def identify(y, model, index, device, top_k=3):
     Returns:
         List of up to top_k Match objects, best first (empty if nothing matched).
     """
-    q = embed_windows(model, frame_audio(y, QUERY_HOP), device)
+    windows = frame_audio(y, QUERY_HOP)
+    q = embed_windows(model, windows, device)
     if len(q) == 0:
         return []
 
-    # Cosine similarity of every query window vs every index window (unit vectors)
+    # Cosine similarity of every query window vs every index window (unit vectors).
+    # Index windows that are themselves silence/noise are excluded as neighbours.
+    guard = get_guard(model, index, device)
     db = index.matrix(device)
-    sims = (torch.from_numpy(q).to(device=device, dtype=db.dtype) @ db.T).float()
+    qt = torch.from_numpy(q).to(device=device, dtype=db.dtype)
+    sims = (qt @ db.T).float()
+    sims[:, ~guard.db_mask] = -1.0
     top_s, top_i = sims.topk(min(TOP_K, sims.shape[1]), dim=1)
+
+    # A window votes only if it has sound and is clearly closer to music than to noise
+    margin = top_s[:, 0] - guard.noise_sim(qt)
+    voiced = loud_enough(windows) & (margin >= NOISE_MARGIN).cpu().numpy()
     top_s, top_i = top_s.cpu().numpy(), top_i.cpu().numpy()
+    top_s[~voiced] = -1.0   # below MIN_SIM, so removed by the filter below
 
     # Vote: neighbours that agree on (song, db_window - query_window) add up
     step = QUERY_HOP // DB_HOP

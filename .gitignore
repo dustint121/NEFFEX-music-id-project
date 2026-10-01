@@ -10,3 +10,4 @@ false_positive_test.py
 make_fp_clips.py
 fp_results.csv
 requirements_cpu.txt
+noise_test.py
